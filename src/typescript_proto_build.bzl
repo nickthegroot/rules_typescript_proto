@@ -37,10 +37,13 @@ def _proto_path(proto):
         path = path[len(root):]
     if path.startswith("/"):
         path = path[1:]
-    if path.startswith(ws):
+    if path.startswith(ws) and len(ws) > 0:
         path = path[len(ws):]
     if path.startswith("/"):
         path = path[1:]
+    if path.startswith("_virtual_imports/"):
+        path = path.split("/")[2:]
+        path = "/".join(path)
     return path
 
 def _get_protoc_inputs(target, ctx):
@@ -82,7 +85,7 @@ def _build_protoc_command(target, ctx):
     if ctx.attr.generate == "grpc-node":
         protoc_command += " --plugin=protoc-gen-grpc=%s" % (ctx.executable._grpc_protoc_gen.path)
 
-    protoc_output_dir = ctx.var["BINDIR"]
+    protoc_output_dir = ctx.bin_dir.path + "/" + ctx.label.workspace_root
     protoc_command += " --ts_out=%s%s%s" % (",".join(ts_flags), ":" if bool(ts_flags) else "", protoc_output_dir)
     protoc_command += " --js_out=import_style=commonjs,binary:%s" % (protoc_output_dir)
 
@@ -147,7 +150,11 @@ def _get_outputs(target, ctx):
         ts_file_suffixes.append("_pb_service.d.ts")
 
     for src in target[ProtoInfo].direct_sources:
-        file_name = src.basename[:-len(src.extension) - 1]
+        if ctx.label.workspace_root == "":
+            file_name = src.basename[:-len(src.extension) - 1]
+        else:
+            file_name = _proto_path(src)[:-len(src.extension) - 1]
+
         for f in js_file_suffixes:
             output = ctx.actions.declare_file(file_name + f)
             js_outputs.append(output)
